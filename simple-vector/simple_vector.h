@@ -157,36 +157,30 @@ public:
         size_ = 0;
     }
 
-    void Fill(Iterator first, Iterator last) {
-        assert(first < last);
+    // void Fill(Iterator first, Iterator last) {
+    //     assert(first < last);
 
-        std::generate(first, last, std::move(Type()));
-    }
+    //     std::generate(first, last, std::move(Type()));
+    // }
 
-    // Изменяет размер массива.
-    // При увеличении размера новые элементы получают значение по умолчанию для типа Type
-        void Resize(size_t new_size) {                                                             
+    void Resize(size_t new_size) {                                                             
         if (new_size == size_) return;
         
         if (new_size < size_) {
-            for (auto it = &items_[new_size]; it != &items_[size_]; ++it) {
-                *(it) = std::move(Type{});
-            }
+            size_ = new_size;
+            return;
         }
         
         if (new_size > capacity_) {
-            auto new_capacity = std::max(new_size, 2 * capacity_);
-            ArrayPtr<Type> arr_ptr(new_capacity);
-            std::move(&items_[0], &items_[size_], &arr_ptr[0]);
-            for (auto it = &arr_ptr[size_]; it != &arr_ptr[new_size]; ++it) {
-                *(it) = std::move(Type{});
-            }
-            items_.swap(arr_ptr);
-            capacity_ = new_capacity;
+            Reserve(std::max(new_size, 2 * capacity_));
+        }
+        
+        for (auto it = &items_[size_]; it != &items_[new_size]; ++it) {
+            *(it) = Type{};
         }
         
         size_ = new_size;
-    }
+    } 
 
     // Добавляет элемент в конец вектора
     // При нехватке места увеличивает вдвое вместимость вектора
@@ -194,7 +188,7 @@ public:
         if (size_ < capacity_) {
             items_[size_] = item;
         } else {
-            auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0
+            auto new_capacity = Reserve(std::max(size_t(1), 2 * capacity_)); //защита, если capacity_=0
             ArrayPtr<Type> arr_ptr(new_capacity);
             std::copy(&items_[0], &items_[size_], &arr_ptr[0]);
             arr_ptr[size_] = item;
@@ -208,63 +202,70 @@ public:
         if (size_ < capacity_) {
             items_[size_] = std::move(item);
         } else {
-            auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0
-            ArrayPtr<Type> arr_ptr(new_capacity);
-            std::move(&items_[0], &items_[size_], &arr_ptr[0]);
-            arr_ptr[size_] = std::move(item);
-            items_.swap(arr_ptr);
-            capacity_ = new_capacity;
+            Reserve(std::max(size_t(1), 2 * capacity_)); 
+            items_[size_] = std::move(item);
+            // auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0
+            // Reserve(new_capacity);
+            // std::move(&items_[0], &items_[size_], &new_capacity[0]);
+            // new_capacity[size_] = std::move(item);
+            // items_.swap(new_capacity);
+            // capacity_ = new_capacity;
         }
         ++size_;
     }
 
-    // Вставляет значение value в позицию pos.
-    // Возвращает итератор на вставленное значение
-    // Если перед вставкой значения вектор был заполнен полностью,
-    // вместимость вектора должна увеличиться вдвое, а для вектора вместимостью 0 стать равной 1
-    Iterator Insert(ConstIterator pos, const Type& value) {
-        assert(pos >= cbegin() && pos <= cend());
-        
-        auto pos_element = std::distance(cbegin(), pos);
-        
-        if (size_ < capacity_) {
-            std::copy_backward(pos, cend(), &items_[(size_ + 1)]);
-            items_[pos_element] = value;
-        } else {
-            auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0
-            ArrayPtr<Type> arr_ptr(new_capacity);
-            std::copy(&items_[0], &items_[pos_element], &arr_ptr[0]);
-            std::copy_backward(pos, cend(), &arr_ptr[(size_ + 1)]);
-            arr_ptr[pos_element] = value;
-            items_.swap(arr_ptr);
-            capacity_ = new_capacity;
-        }
-        
-        ++size_;
-        return Iterator{&items_[pos_element]};
+
+     void insertItemAtPos(size_t pos, const Type& value, ArrayPtr<Type>& arr_ptr) {
+        arr_ptr[pos] = value;
+    }
+    void insertItemAtPos(size_t pos, Type&& value, ArrayPtr<Type>& arr_ptr) {
+        arr_ptr[pos] = std::move(value);
     }
 
-    Iterator Insert(ConstIterator pos, Type&& value) {
-        assert(pos >= cbegin() && pos <= cend());
+    Iterator Insert(ConstIterator pos, Type&& value) { 
+        assert(pos >= cbegin() && pos <= cend()); 
         
-        auto no_const_pos = const_cast<Iterator>(pos);
-        auto pos_element = std::distance(begin(), no_const_pos);
+        auto no_const_pos = const_cast<Iterator>(pos); 
+        auto pos_element = std::distance(begin(), no_const_pos); 
         
-        if (size_ < capacity_) {
-            std::move_backward(no_const_pos, end(), &items_[(size_ + 1)]);
-            items_[pos_element] = std::move(value);
-        } else {
-            auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0
-            ArrayPtr<Type> arr_ptr(new_capacity);
-            std::move(&items_[0], &items_[pos_element], &arr_ptr[0]);
-            std::move_backward(no_const_pos, end(), &arr_ptr[(size_ + 1)]);
-            arr_ptr[pos_element] = std::move(value);
-            items_.swap(arr_ptr);
-            capacity_ = new_capacity;
-        }
+        if (size_ < capacity_) { 
+            std::move_backward(no_const_pos, end(), &items_[(size_ + 1)]); 
+            insertItemAtPos(pos_element, std::move(value), items_);
+        } else { 
+            auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0 
+            ArrayPtr<Type> arr_ptr(new_capacity); 
+            std::move(&items_[0], &items_[pos_element], &arr_ptr[0]); 
+            std::move_backward(no_const_pos, end(), &arr_ptr[(size_ + 1)]); 
+            insertItemAtPos(pos_element, std::move(value), arr_ptr);
+            items_.swap(arr_ptr); 
+            capacity_ = new_capacity; 
+        } 
         
-        ++size_;
-        return Iterator{&items_[pos_element]};
+        ++size_; 
+        return Iterator{&items_[pos_element]}; 
+    }
+    
+    Iterator Insert(ConstIterator pos, const Type& value) { 
+        assert(pos >= cbegin() && pos <= cend()); 
+        
+        auto no_const_pos = const_cast<Iterator>(pos); 
+        auto pos_element = std::distance(begin(), no_const_pos); 
+        
+        if (size_ < capacity_) { 
+            std::move_backward(no_const_pos, end(), &items_[(size_ + 1)]); 
+            insertItemAtPos(pos_element, value, items_);
+        } else { 
+            auto new_capacity = std::max(size_t(1), 2 * capacity_); //защита, если capacity_=0 
+            ArrayPtr<Type> arr_ptr(new_capacity); 
+            std::move(&items_[0], &items_[pos_element], &arr_ptr[0]); 
+            std::move_backward(no_const_pos, end(), &arr_ptr[(size_ + 1)]); 
+            insertItemAtPos(pos_element, value, arr_ptr);
+            items_.swap(arr_ptr); 
+            capacity_ = new_capacity; 
+        } 
+        
+        ++size_; 
+        return Iterator{&items_[pos_element]}; 
     }
 
     // "Удаляет" последний элемент вектора. Вектор не должен быть пустым
@@ -292,11 +293,11 @@ public:
     }
 
     void Reserve(size_t new_capacity) {
-        if (new_capacity > capacity_) {
-            SimpleVector<Type> temp(new_capacity);
-            std::copy(cbegin(), cend(), temp.begin());
-            temp.size_ = size_;
-            swap(temp);
+    if(new_capacity > capacity_){
+        ArrayPtr<Type> arr_ptr(new_capacity);
+        std::move(&items_[0], &items_[size_], &arr_ptr[0]);
+        items_.swap(arr_ptr);
+        capacity_ = new_capacity;
         }
     }
 

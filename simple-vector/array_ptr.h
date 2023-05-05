@@ -12,11 +12,7 @@ public:
 
     // Создаёт в куче массив из size элементов типа Type.
     // Если size == 0, поле raw_ptr_ должно быть равно nullptr
-     explicit ArrayPtr(size_t size) {
-        if (size != 0) {
-            raw_ptr_ = new Type[size];
-        }
-    }
+     explicit ArrayPtr(size_t size) : raw_ptr_(size == 0 ? nullptr : new Type[size]) {}
 
     // Конструктор из сырого указателя, хранящего адрес массива в куче либо nullptr
     explicit ArrayPtr(Type* raw_ptr) noexcept
@@ -33,9 +29,10 @@ public:
     		return *this;
         }
         
-    	raw_ptr_ = rhs.raw_ptr_;
-    	rhs.raw_ptr_ = nullptr;
-    	return *this;
+    	delete raw_ptr_;
+        raw_ptr_ = std::move(rhs.raw_ptr_);
+        rhs.raw_ptr_ = nullptr;
+        return *this;
     }
 
     // Запрещаем копирование
