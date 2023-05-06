@@ -30,7 +30,7 @@ public:
         }
         
     	delete raw_ptr_;
-        raw_ptr_ = std::move(rhs.raw_ptr_);
+        std::swap(*this, rhs);
         rhs.raw_ptr_ = nullptr;
         return *this;
     }
